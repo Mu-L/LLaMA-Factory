@@ -27,7 +27,7 @@ from transformers import Seq2SeqTrainer
 from ...extras.constants import IGNORE_INDEX
 from ...extras.logging import get_logger
 from ..callbacks import PissaConvertCallback, SaveProcessorCallback
-from ..trainer_utils import create_custom_optimzer, create_custom_scheduler
+from ..trainer_utils import create_custom_optimizer, create_custom_scheduler
 
 
 if TYPE_CHECKING:
@@ -66,7 +66,7 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
 
     def create_optimizer(self) -> "torch.optim.Optimizer":
         if self.optimizer is None:
-            self.optimizer = create_custom_optimzer(self.model, self.args, self.finetuning_args)
+            self.optimizer = create_custom_optimizer(self.model, self.args, self.finetuning_args)
         return super().create_optimizer()
 
     def create_scheduler(
@@ -135,21 +135,16 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
 
         for i in range(len(preds)):
             pad_len = np.nonzero(preds[i] != self.tokenizer.pad_token_id)[0]
-            if len(pad_len):
-                preds[i] = np.concatenate(
-                    (preds[i][pad_len[0] :], preds[i][: pad_len[0]]), axis=-1
-                )  # move pad token to last
+            if len(pad_len):  # move pad token to last
+                preds[i] = np.concatenate((preds[i][pad_len[0] :], preds[i][: pad_len[0]]), axis=-1)
 
-        decoded_inputs = self.tokenizer.batch_decode(
-            dataset["input_ids"], skip_special_tokens=True, clean_up_tokenization_spaces=False
-        )
-        decoded_labels = self.tokenizer.batch_decode(
-            labels, skip_special_tokens=True, clean_up_tokenization_spaces=False
-        )
-        decoded_preds = self.tokenizer.batch_decode(preds, skip_special_tokens=True, clean_up_tokenization_spaces=True)
+        decoded_inputs = self.tokenizer.batch_decode(dataset["input_ids"], skip_special_tokens=True)
+        decoded_labels = self.tokenizer.batch_decode(labels, skip_special_tokens=True)
+        decoded_preds = self.tokenizer.batch_decode(preds, skip_special_tokens=True)
 
         with open(output_prediction_file, "w", encoding="utf-8") as writer:
             res: List[str] = []
             for text, label, pred in zip(decoded_inputs, decoded_labels, decoded_preds):
                 res.append(json.dumps({"prompt": text, "label": label, "predict": pred}, ensure_ascii=False))
+
             writer.write("\n".join(res))
